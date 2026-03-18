@@ -1,0 +1,61 @@
+/* Auth Forms Styling */
+.auth-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.auth-icon {
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.auth-container .card {
+    backdrop-filter: blur(10px);
+    border-radius: 20px !important;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.auth-container .form-control,
+.auth-container .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef !important;
+    padding: 12px 15px;
+    transition: all 0.3s ease;
+}
+
+.auth-container .form-control:focus,
+.auth-container .form-select:focus {
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.auth-container .btn {
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+.auth-container .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.auth-container a {
+    transition: all 0.3s ease;
+}
+
+.auth-container a:hover {
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
