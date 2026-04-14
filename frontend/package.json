@@ -1,7 +1,7 @@
 {
-  "name": "restaurant-frontend",
+  "name": "tpc-frontend",
   "version": "1.0.0",
-  "description": "Frontend for Restaurant Management System",
+  "description": "Frontend for TPC Support System",
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "^3.1.0",

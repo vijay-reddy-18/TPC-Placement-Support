@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FaSearch, FaFilter, FaChevronDown } from 'react-icons/fa';
 import TPCLayout from '../components/TPCLayout';
 import { ticketAPI } from '../services/api';
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 const TPCTicketsPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,7 +26,17 @@ const TPCTicketsPage = () => {
     // Bulk selection
     const [selectedRows, setSelectedRows] = useState(new Set());
 
-    useEffect(() => { loadTickets(); }, []);
+    useEffect(() => { 
+        loadTickets(); 
+    }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const status = params.get('status');
+        if (status === 'open') setActiveTab('new');
+        else if (status === 'in-progress') setActiveTab('in-progress');
+        else if (status === 'resolved') setActiveTab('resolved');
+    }, [location.search]);
 
     const loadTickets = async () => {
         try {

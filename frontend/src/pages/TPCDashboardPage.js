@@ -1,39 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Filler } from 'chart.js';
-import { Doughnut, Line } from 'react-chartjs-2';
 import TPCLayout from '../components/TPCLayout';
-import { useAuth } from '../context/AuthContext';
-import { ticketAPI } from '../services/api';
+import { ticketAPI, activityLogAPI } from '../services/api';
+import { Badge, Button, Row, Col, Card, Table } from 'react-bootstrap';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Filler);
+const SLADeadlineHours = { urgent: 4, high: 24, medium: 48, low: 72 };
+
+const getSLAStatus = (ticket) => {
+    const created = new Date(ticket.createdAt);
+    const now = new Date();
+    const limitHrs = SLADeadlineHours[ticket.priority] || 48;
+    const deadlineMs = created.getTime() + limitHrs * 3600000;
+    const remainMs = deadlineMs - now.getTime();
+    const remainHrs = remainMs / 3600000;
+    if (remainHrs < 0) return { label: 'BREACHED', color: '#ef4444', bg: '#fef2f2', pct: 100 };
+    if (remainHrs < 2) return { label: `${Math.round(remainHrs * 60)}m left`, color: '#f59e0b', bg: '#fffbeb', pct: Math.max(0, 100 - (remainHrs / limitHrs) * 100) };
+    return { label: `${remainHrs.toFixed(1)}h left`, color: '#10b981', bg: '#f0fdf4', pct: Math.max(0, 100 - (remainHrs / limitHrs) * 100) };
+};
 
 const TPCDashboardPage = () => {
-    const { user } = useAuth();
+    const { } = {};
     const navigate = useNavigate();
     const [tickets, setTickets] = useState([]);
     const [stats, setStats] = useState(null);
-    const [categoryAnalytics, setCategoryAnalytics] = useState([]);
-    const [weeklyTrends, setWeeklyTrends] = useState([]);
+    const [activityLogs, setActivityLogs] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    useEffect(() => { loadDashboard(); }, []);
+
+    // Auto-refresh every 30s for real-time
     useEffect(() => {
-        loadDashboard();
+        const interval = setInterval(loadDashboard, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const loadDashboard = async () => {
         try {
             setLoading(true);
-            const [ticketsRes, statsRes, categoryRes, trendsRes] = await Promise.all([
-                ticketAPI.getAllTickets(null, null, null, 1, 1000),
-                ticketAPI.getDashboardStats(),
-                ticketAPI.getCategoryAnalytics(),
-                ticketAPI.getWeeklyTrends(),
+            const [ticketsRes, statsRes] = await Promise.all([
+                ticketAPI.getAllTickets(null, null, null, 1, 200),
+                ticketAPI.getDashboardStats()
             ]);
-            setTickets(ticketsRes.data.tickets);
-            setStats(statsRes.data.stats);
-            setCategoryAnalytics(categoryRes.data.analytics);
-            setWeeklyTrends(trendsRes.data.trends);
+            const allTickets = ticketsRes.data.tickets || [];
+            setTickets(allTickets);
+            setStats(statsRes.data.stats || null);
+
+            // Build activity from recent ticket changes
+            const recent = allTickets
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+                .slice(0, 10)
+                .map(t => ({
+                    id: t._id,
+                    icon: t.status === 'resolved' ? '✅' : t.status === 'in-progress' ? '⏳' : t.isEscalated ? '⚡' : '📋',
+                    text: t.status === 'resolved'
+                        ? `Ticket #${t._id.slice(-5).toUpperCase()} resolved`
+                        : t.isEscalated
+                        ? `Ticket #${t._id.slice(-5).toUpperCase()} escalated`
+                        : t.assignedTo
+                        ? `Ticket #${t._id.slice(-5).toUpperCase()} assigned to ${t.assignedTo?.name || 'TPC'}`
+                        : `Ticket #${t._id.slice(-5).toUpperCase()} opened`,
+                    time: t.updatedAt
+                }));
+            setActivityLogs(recent);
         } catch (error) {
             console.error('Failed to load dashboard:', error);
         } finally {
@@ -41,250 +69,234 @@ const TPCDashboardPage = () => {
         }
     };
 
-    const openCount = stats?.openTickets || 0;
-    const urgentCount = tickets.filter(t => t.priority === 'urgent' && t.status === 'open').length;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
 
-    // Format current date
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    // Time ago helper
-    const getTimeAgo = (date) => {
-        const diff = Date.now() - new Date(date).getTime();
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1) return 'Just now';
-        if (mins < 60) return `${mins} min ago`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-        const days = Math.floor(hours / 24);
-        return `${days} day${days > 1 ? 's' : ''} ago`;
-    };
-
-    // Weekly Trends line chart
-    const trendLabels = weeklyTrends.map(t => {
-        const d = new Date(t._id);
-        return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+    const openTickets      = tickets.filter(t => t.status === 'open');
+    const inProgressTickets= tickets.filter(t => t.status === 'in-progress');
+    const resolvedToday    = tickets.filter(t => t.status === 'resolved' && (t.resolvedAt || t.updatedAt || '').startsWith(todayStr));
+    const pendingCount     = tickets.filter(t => ['open','in-progress'].includes(t.status)).length;
+    const slaBreached      = tickets.filter(t => {
+        if (['resolved','closed'].includes(t.status)) return false;
+        const created = new Date(t.createdAt);
+        const limitHrs = SLADeadlineHours[t.priority] || 48;
+        return (now - created) / 3600000 > limitHrs;
     });
-    const trendData = weeklyTrends.map(t => t.count);
+    const nearBreach       = tickets.filter(t => {
+        if (['resolved','closed'].includes(t.status)) return false;
+        const created = new Date(t.createdAt);
+        const limitHrs = SLADeadlineHours[t.priority] || 48;
+        const remainHrs = limitHrs - (now - created) / 3600000;
+        return remainHrs >= 0 && remainHrs <= 2;
+    });
 
-    const lineChartData = {
-        labels: trendLabels.length > 0 ? trendLabels : ['No Data'],
-        datasets: [{
-            label: 'Tickets',
-            data: trendData.length > 0 ? trendData : [0],
-            fill: true,
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
-            borderColor: '#3b82f6',
-            borderWidth: 2.5,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: '#3b82f6',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            pointHoverRadius: 6,
-        }]
-    };
+    // Workload: tickets per agent
+    const agentMap = {};
+    tickets.filter(t => t.assignedTo && !['resolved','closed'].includes(t.status)).forEach(t => {
+        const name = t.assignedTo?.name || 'Unknown';
+        agentMap[name] = (agentMap[name] || 0) + 1;
+    });
+    const agentWorkload = Object.entries(agentMap).sort((a,b) => b[1]-a[1]).slice(0,5);
+    const maxLoad = agentWorkload[0]?.[1] || 1;
 
-    const lineChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: {
-                beginAtZero: true,
-                grid: { color: '#f3f4f6' },
-                ticks: { font: { size: 11, family: 'Inter' }, color: '#9ca3af' }
-            },
-            x: {
-                grid: { display: false },
-                ticks: { font: { size: 11, family: 'Inter' }, color: '#9ca3af' }
-            }
-        }
-    };
-
-    // Category Breakdown donut
-    const catColors = ['#2563eb', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16'];
-    const catLabels = categoryAnalytics.length > 0
-        ? categoryAnalytics.map(c => c.category)
-        : ['No Data'];
-    const catDataValues = categoryAnalytics.length > 0
-        ? categoryAnalytics.map(c => c.total)
-        : [0];
-    const catTotal = catDataValues.reduce((a, b) => a + b, 0) || 1;
-
-    const donutData = {
-        labels: catLabels,
-        datasets: [{
-            data: catDataValues,
-            backgroundColor: catColors.slice(0, catLabels.length),
-            borderWidth: 0,
-            cutout: '65%',
-        }]
-    };
-
-    const donutOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: (ctx) => `${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed / catTotal * 100)}%)`
-                }
-            }
-        }
-    };
-
-    const getPriorityClass = (p) => {
-        return p === 'urgent' || p === 'high' ? 'high' : p === 'medium' ? 'medium' : 'low';
-    };
-
-    const getStatusClass = (s) => {
-        return s === 'open' ? 'open' : s === 'in-progress' ? 'in-progress' : s === 'resolved' ? 'resolved' : 'closed';
-    };
-
-    const recentTickets = tickets.slice(0, 5);
-    const totalThisWeek = stats?.totalTickets || tickets.length;
-    const resolutionRate = totalThisWeek > 0 ? Math.round((stats?.resolvedTickets || 0) / totalThisWeek * 100) : 0;
+    const KPIs = [
+        { icon: '🎫', label: 'Total Tickets', value: tickets.length, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', action: () => navigate('/tpc/tickets') },
+        { icon: '⏳', label: 'Pending',        value: pendingCount,   color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  action: () => navigate('/tpc/tickets?status=open') },
+        { icon: '🔴', label: 'SLA Breached',   value: slaBreached.length, color: '#ef4444', bg: 'rgba(239,68,68,0.08)', action: () => navigate('/tpc/sla') },
+        { icon: '✅', label: 'Resolved Today', value: resolvedToday.length, color: '#10b981', bg: 'rgba(16,185,129,0.08)', action: () => navigate('/tpc/tickets?status=resolved') },
+    ];
 
     if (loading) {
         return (
-            <TPCLayout pageTitle="Support Dashboard" openTicketCount={0}>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                    <div style={{ textAlign: 'center', color: '#9ca3af' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
-                        <p style={{ fontWeight: 500 }}>Loading dashboard...</p>
-                    </div>
+            <TPCLayout pageTitle="TPC Dashboard" openTicketCount={0}>
+                <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'60vh' }}>
+                    <div className="spinner-border text-primary" role="status" />
                 </div>
             </TPCLayout>
         );
     }
 
     return (
-        <TPCLayout pageTitle="TPC Support Dashboard" openTicketCount={openCount}>
-            {/* Welcome Section */}
-            <div style={{ marginBottom: '1.5rem' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>
-                    Welcome back, {user?.name || 'TPC Staff'}
-                </h2>
-                <p style={{ color: '#9ca3af', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>{dateStr}</p>
-            </div>
+        <TPCLayout pageTitle="TPC Dashboard — Control Center" openTicketCount={openTickets.length}>
 
-            {/* Stat Cards */}
-            <div className="tpc-stats-row">
-                <div className="tpc-stat-card blue">
-                    <div className="tpc-stat-info">
-                        <h6>Total Tickets</h6>
-                        <p className="tpc-stat-number">{stats?.totalTickets || tickets.length}</p>
-                        <p className="tpc-stat-sub">↑ +12% this week</p>
-                    </div>
-                    <div className="tpc-stat-icon">📋</div>
-                </div>
-                <div className="tpc-stat-card orange">
-                    <div className="tpc-stat-info">
-                        <h6>Open</h6>
-                        <p className="tpc-stat-number">{openCount}</p>
-                        <p className="tpc-stat-sub">
-                            {urgentCount > 0 && <><span className="tpc-stat-badge">Urgent {urgentCount}</span></>}
-                            {urgentCount === 0 && '⬇ Urgent'}
-                        </p>
-                    </div>
-                    <div className="tpc-stat-icon">📨</div>
-                </div>
-                <div className="tpc-stat-card amber">
-                    <div className="tpc-stat-info">
-                        <h6>In Progress</h6>
-                        <p className="tpc-stat-number">{stats?.inProgressTickets || 0}</p>
-                        <p className="tpc-stat-sub">Active tickets</p>
-                    </div>
-                    <div className="tpc-stat-icon">⚙️</div>
-                </div>
-                <div className="tpc-stat-card green">
-                    <div className="tpc-stat-info">
-                        <h6>Resolved</h6>
-                        <p className="tpc-stat-number">{stats?.resolvedTickets || 0}</p>
-                        <p className="tpc-stat-sub">✓ +{resolutionRate}% resolution rate</p>
-                    </div>
-                    <div className="tpc-stat-icon">✅</div>
-                </div>
-            </div>
+            {/* ===== KPI Cards ===== */}
+            <Row className="mb-4 g-3">
+                {KPIs.map(kpi => (
+                    <Col key={kpi.label} xs={6} md={3}>
+                        <Card
+                            style={{ borderRadius:12, border:'none', boxShadow:'0 2px 12px rgba(0,0,0,0.05)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s' }}
+                            onClick={kpi.action}
+                            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.05)'; }}
+                        >
+                            <Card.Body style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'1.1rem' }}>
+                                <div style={{ width:48, height:48, borderRadius:12, background:kpi.bg, color:kpi.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.4rem', flexShrink:0 }}>
+                                    {kpi.icon}
+                                </div>
+                                <div>
+                                    <div style={{ fontSize:'0.75rem', color:'#64748b', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em' }}>{kpi.label}</div>
+                                    <div style={{ fontSize:'1.8rem', fontWeight:800, color:'#0f172a', lineHeight:1.1 }}>{kpi.value}</div>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                ))}
+            </Row>
 
-            {/* Charts Row */}
-            <div className="tpc-charts-row">
-                {/* Weekly Trends */}
-                <div className="tpc-card">
-                    <div className="tpc-card-header">
-                        <h3 className="tpc-card-title">Weekly Trends</h3>
-                    </div>
-                    <div className="tpc-card-body" style={{ height: '280px' }}>
-                        <Line data={lineChartData} options={lineChartOptions} />
-                    </div>
-                </div>
+            {/* ===== SLA Monitor + Workload ===== */}
+            <Row className="mb-4 g-3">
+                {/* SLA Monitor */}
+                <Col md={7}>
+                    <Card style={{ borderRadius:12, border:'none', boxShadow:'0 2px 12px rgba(0,0,0,0.05)', height:'100%' }}>
+                        <Card.Header style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'1rem 1.25rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderRadius:'12px 12px 0 0' }}>
+                            <div style={{ fontWeight:700, color:'#0f172a' }}>⏱️ SLA Monitor</div>
+                            <Button variant="link" size="sm" style={{ textDecoration:'none', color:'#3b82f6', fontWeight:600 }} onClick={() => navigate('/tpc/sla')}>
+                                View All →
+                            </Button>
+                        </Card.Header>
+                        <Card.Body style={{ padding:'1rem', maxHeight:280, overflowY:'auto' }}>
+                            {slaBreached.length === 0 && nearBreach.length === 0 && (
+                                <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8', fontSize:'0.88rem' }}>
+                                    🎉 All tickets within SLA limits!
+                                </div>
+                            )}
+                            {[...slaBreached, ...nearBreach].slice(0,8).map(t => {
+                                const sla = getSLAStatus(t);
+                                return (
+                                    <div key={t._id}
+                                        style={{ display:'flex', gap:'0.75rem', alignItems:'center', padding:'0.6rem 0.5rem', borderBottom:'1px solid #f1f5f9', cursor:'pointer' }}
+                                        onClick={() => navigate(`/tpc/tickets/${t._id}`)}
+                                    >
+                                        <div style={{ minWidth:80, fontSize:'0.72rem', fontWeight:700, color:'#64748b' }}>
+                                            #{t._id.slice(-5).toUpperCase()}
+                                        </div>
+                                        <div style={{ flex:1, fontSize:'0.82rem', color:'#1e293b', fontWeight:500,  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                            {t.title}
+                                        </div>
+                                        <div style={{ minWidth:90 }}>
+                                            <div style={{ fontSize:'0.7rem', fontWeight:700, color:sla.color, background:sla.bg, padding:'2px 8px', borderRadius:999, textAlign:'center' }}>
+                                                {sla.label}
+                                            </div>
+                                            <div style={{ height:4, borderRadius:4, background:'#e2e8f0', marginTop:4, overflow:'hidden' }}>
+                                                <div style={{ height:'100%', width:`${Math.min(100,sla.pct)}%`, background:sla.color, borderRadius:4, transition:'width 0.3s' }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </Card.Body>
+                    </Card>
+                </Col>
 
-                {/* Category Breakdown */}
-                <div className="tpc-card">
-                    <div className="tpc-card-header">
-                        <h3 className="tpc-card-title">Category Breakdown</h3>
-                    </div>
-                    <div className="tpc-card-body" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                        <div style={{ width: '160px', height: '160px', flexShrink: 0 }}>
-                            <Doughnut data={donutData} options={donutOptions} />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {catLabels.map((label, i) => (
-                                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
-                                    <span style={{
-                                        width: 12, height: 12, borderRadius: 3,
-                                        background: catColors[i], flexShrink: 0
-                                    }} />
-                                    <span style={{ color: '#374151', fontWeight: 500 }}>{label}</span>
-                                    <span style={{ color: '#9ca3af', fontWeight: 600, marginLeft: 'auto' }}>
-                                        {catTotal > 0 ? Math.round(catDataValues[i] / catTotal * 100) : 0}%
-                                    </span>
+                {/* Workload View */}
+                <Col md={5}>
+                    <Card style={{ borderRadius:12, border:'none', boxShadow:'0 2px 12px rgba(0,0,0,0.05)', height:'100%' }}>
+                        <Card.Header style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'1rem 1.25rem', borderRadius:'12px 12px 0 0' }}>
+                            <div style={{ fontWeight:700, color:'#0f172a' }}>👥 Team Workload</div>
+                        </Card.Header>
+                        <Card.Body style={{ padding:'1rem' }}>
+                            {agentWorkload.length === 0 ? (
+                                <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8', fontSize:'0.88rem' }}>No active assignments</div>
+                            ) : agentWorkload.map(([name, count]) => (
+                                <div key={name} style={{ marginBottom:'0.75rem' }}>
+                                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.83rem', fontWeight:600, color:'#374151', marginBottom:4 }}>
+                                        <span>👤 {name}</span>
+                                        <span style={{ color: count > 5 ? '#ef4444' : count > 2 ? '#f59e0b' : '#10b981' }}>{count} active</span>
+                                    </div>
+                                    <div style={{ height:6, borderRadius:4, background:'#e2e8f0', overflow:'hidden' }}>
+                                        <div style={{ height:'100%', width:`${(count/maxLoad)*100}%`, background: count > 5 ? '#ef4444' : count > 2 ? '#f59e0b' : '#10b981', borderRadius:4, transition:'width 0.3s' }} />
+                                    </div>
                                 </div>
                             ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
+                            <div style={{ marginTop:'1rem', padding:'0.75rem', background:'#f8fafc', borderRadius:8, fontSize:'0.8rem', color:'#64748b', textAlign:'center' }}>
+                                Unassigned: <strong style={{ color:'#ef4444' }}>{openTickets.length}</strong> tickets
+                            </div>
+                        </Card.Body>
+                    </Card>
+                </Col>
+            </Row>
 
-            {/* Recent Tickets */}
-            <div className="tpc-card">
-                <div className="tpc-card-header">
-                    <h3 className="tpc-card-title">Recent Tickets</h3>
-                    <span className="tpc-view-all" onClick={() => navigate('/tpc/tickets')}>View All</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="tpc-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Student</th>
-                                <th>Subject</th>
-                                <th>Priority</th>
-                                <th>Status</th>
-                                <th>Time Ago</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recentTickets.length === 0 ? (
-                                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>No tickets yet</td></tr>
-                            ) : (
-                                recentTickets.map((t) => (
-                                    <tr key={t._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/tpc/tickets/${t._id}`)}>
-                                        <td style={{ fontWeight: 600 }}>#{t._id.slice(-4).toUpperCase()}</td>
-                                        <td>{t.studentId}</td>
-                                        <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</td>
-                                        <td><span className={`tpc-badge ${getPriorityClass(t.priority)}`}>{t.priority?.charAt(0).toUpperCase() + t.priority?.slice(1)}</span></td>
-                                        <td><span className={`tpc-badge ${getStatusClass(t.status)}`}>{t.status === 'in-progress' ? 'In Progress' : t.status?.charAt(0).toUpperCase() + t.status?.slice(1)}</span></td>
-                                        <td className="tpc-time-ago">{getTimeAgo(t.createdAt)}</td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            {/* ===== New Queries + In Progress + Activity Feed ===== */}
+            <Row className="mb-4 g-3">
+                {/* New Queries */}
+                <Col md={4}>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 style={{ fontWeight:700, margin:0 }}>📥 New Queries</h6>
+                        <Button variant="link" size="sm" style={{ textDecoration:'none', color:'#3b82f6', fontWeight:600, padding:0 }} onClick={() => navigate('/tpc/incoming')}>View All →</Button>
+                    </div>
+                    {openTickets.slice(0,4).length > 0 ? openTickets.slice(0,4).map(ticket => (
+                        <Card key={ticket._id} className="mb-2 ticket-card-hover" style={{ borderRadius:10, border:'1px solid #e2e8f0', cursor:'pointer' }} onClick={() => navigate(`/tpc/tickets/${ticket._id}`)}>
+                            <Card.Body style={{ padding:'0.875rem' }}>
+                                <div className="d-flex justify-content-between align-items-start mb-1">
+                                    <div style={{ fontSize:'0.8rem', fontWeight:700, color:'#0f172a' }}>{ticket.studentId}</div>
+                                    <span style={{ fontSize:'0.7rem', color:'#94a3b8' }}>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <div style={{ fontSize:'0.83rem', color:'#1e293b', fontWeight:500, marginBottom:'0.5rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ticket.title}</div>
+                                <Badge style={{ background: ticket.priority==='urgent'?'#fef2f2':ticket.priority==='high'?'#fef2f2':'#fffbeb', color: ticket.priority==='urgent'||ticket.priority==='high'?'#ef4444':'#d97706', padding:'3px 8px', borderRadius:6, fontSize:'0.7rem', fontWeight:700 }}>
+                                    {ticket.priority?.toUpperCase()}
+                                </Badge>
+                            </Card.Body>
+                        </Card>
+                    )) : (
+                        <div style={{ padding:'1.5rem', textAlign:'center', background:'#fff', borderRadius:10, border:'1px dashed #cbd5e1', color:'#94a3b8', fontSize:'0.85rem' }}>No new queries!</div>
+                    )}
+                </Col>
+
+                {/* In Progress */}
+                <Col md={4}>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 style={{ fontWeight:700, margin:0 }}>⏳ In Progress</h6>
+                        <Button variant="link" size="sm" style={{ textDecoration:'none', color:'#f59e0b', fontWeight:600, padding:0 }} onClick={() => navigate('/tpc/tickets?status=in-progress')}>View All →</Button>
+                    </div>
+                    {inProgressTickets.slice(0,4).length > 0 ? inProgressTickets.slice(0,4).map(ticket => {
+                        const sla = getSLAStatus(ticket);
+                        return (
+                            <Card key={ticket._id} className="mb-2 ticket-card-hover" style={{ borderRadius:10, border:`1px solid ${sla.label==='BREACHED'?'#fecaca':'#e2e8f0'}`, cursor:'pointer' }} onClick={() => navigate(`/tpc/tickets/${ticket._id}`)}>
+                                <Card.Body style={{ padding:'0.875rem' }}>
+                                    <div style={{ fontSize:'0.83rem', fontWeight:600, color:'#0f172a', marginBottom:'0.4rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ticket.title}</div>
+                                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                        <span style={{ fontSize:'0.72rem', color:'#64748b' }}>👤 {ticket.assignedTo?.name || 'Unassigned'}</span>
+                                        <span style={{ fontSize:'0.7rem', fontWeight:700, color:sla.color, background:sla.bg, padding:'2px 7px', borderRadius:999 }}>{sla.label}</span>
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        );
+                    }) : (
+                        <div style={{ padding:'1.5rem', textAlign:'center', background:'#fff', borderRadius:10, border:'1px dashed #cbd5e1', color:'#94a3b8', fontSize:'0.85rem' }}>No active tickets</div>
+                    )}
+                </Col>
+
+                {/* Live Activity Feed */}
+                <Col md={4}>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 style={{ fontWeight:700, margin:0 }}>⚡ Live Activity</h6>
+                        <button onClick={loadDashboard} style={{ background:'none', border:'none', cursor:'pointer', color:'#3b82f6', fontSize:'0.8rem', fontWeight:600 }}>↺ Refresh</button>
+                    </div>
+                    <Card style={{ borderRadius:10, border:'1px solid #e2e8f0', height:'auto', maxHeight:340, overflowY:'auto' }}>
+                        <Card.Body style={{ padding:'0.75rem', display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                            {activityLogs.length === 0 ? (
+                                <div style={{ textAlign:'center', padding:'1.5rem', color:'#94a3b8', fontSize:'0.85rem' }}>No recent activity</div>
+                            ) : activityLogs.map((log, i) => (
+                                <div key={i} style={{ display:'flex', gap:'0.6rem', alignItems:'flex-start', padding:'0.5rem', borderRadius:8, background: i===0?'#f0f9ff':'transparent', cursor:'pointer' }}
+                                    onClick={() => navigate(`/tpc/tickets/${log.id}`)}>
+                                    <span style={{ fontSize:'1rem', flexShrink:0 }}>{log.icon}</span>
+                                    <div style={{ flex:1 }}>
+                                        <div style={{ fontSize:'0.8rem', color:'#0f172a', fontWeight:500, lineHeight:1.3 }}>{log.text}</div>
+                                        <div style={{ fontSize:'0.7rem', color:'#94a3b8', marginTop:2 }}>
+                                            {new Date(log.time).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+                                        </div>
+                                    </div>
+                                    {i===0 && <span style={{ fontSize:'0.65rem', fontWeight:700, color:'#3b82f6', background:'#eff6ff', padding:'2px 6px', borderRadius:999, flexShrink:0 }}>NEW</span>}
+                                </div>
+                            ))}
+                        </Card.Body>
+                    </Card>
+                </Col>
+            </Row>
+
+            <style>{`
+                .ticket-card-hover:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.08) !important; transform: translateY(-1px); }
+            `}</style>
         </TPCLayout>
     );
 };

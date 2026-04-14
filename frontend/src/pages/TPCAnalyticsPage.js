@@ -17,6 +17,12 @@ const TPCAnalyticsPage = () => {
 
     useEffect(() => { loadAnalytics(); }, []);
 
+    // Auto-refresh every 30s for real-time
+    useEffect(() => {
+        const interval = setInterval(loadAnalytics, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const loadAnalytics = async () => {
         try {
             setLoading(true);
@@ -175,7 +181,7 @@ const TPCAnalyticsPage = () => {
                     <div className="tpc-stat-info">
                         <h6>Total Resolved</h6>
                         <p className="tpc-stat-number">{resolved}</p>
-                        <p className="tpc-stat-sub">✓ +8% resolution rate</p>
+                        <p className="tpc-stat-sub">✓ {total > 0 ? Math.round((resolved / total) * 100) : 0}% resolution rate</p>
                     </div>
                     <div className="tpc-stat-icon">✅</div>
                 </div>
@@ -183,15 +189,15 @@ const TPCAnalyticsPage = () => {
                     <div className="tpc-stat-info">
                         <h6>Avg Response Time</h6>
                         <p className="tpc-stat-number">{avgResponseHours} hours</p>
-                        <p className="tpc-stat-sub">↓ -10% vs last week</p>
+                        <p className="tpc-stat-sub">{avgResponseHours < 24 ? '✓ Within SLA limits' : '⚠ Above SLA target'}</p>
                     </div>
                     <div className="tpc-stat-icon">⏱</div>
                 </div>
                 <div className="tpc-stat-card purple">
                     <div className="tpc-stat-info">
                         <h6>SLA Compliance %</h6>
-                        <p className="tpc-stat-number">{slaPercent}%</p>
-                        <p className="tpc-stat-sub">↑ +2% this week</p>
+                        <p className="tpc-stat-number">{slaPercent > 0 ? slaPercent : (total > 0 ? Math.round(((total - tickets.filter(t => t.slaStatus === 'breached').length) / total) * 100) : 100)}%</p>
+                        <p className="tpc-stat-sub">{tickets.filter(t => t.slaStatus === 'breached').length} SLA breaches</p>
                     </div>
                     <div className="tpc-stat-icon">🛡️</div>
                 </div>

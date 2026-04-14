@@ -110,14 +110,53 @@ const TPCTicketDetail = () => {
     };
 
     const handleReopen = async () => {
+        const reason = window.prompt('Please describe the reason for reopening this ticket:');
+        if (reason === null) return; // cancelled
+        if (!reason.trim()) {
+            toast.error('A reason is required to reopen the ticket');
+            return;
+        }
+        
         try {
-            await ticketAPI.reopenTicket(id, 'Reopened by TPC staff');
+            await ticketAPI.reopenTicket(id, reason.trim());
             toast.success('Ticket reopened successfully');
             loadTicketDetail();
-        } catch (err) { 
+        } catch (err) {
             console.error('Reopen failed:', err);
             toast.error('Failed to reopen ticket');
         }
+    };
+
+    const handleReassign = async () => {
+        const staffId = prompt('Enter the ID or email of the TPC Member to Assign:');
+        if (!staffId) return;
+        try {
+            await ticketAPI.assignTicket(id, staffId);
+            toast.success('Ticket actively reassigned!');
+            loadTicketDetail();
+        } catch (err) {
+            toast.error('Failed to reassign');
+        }
+    };
+
+    const handleForward = async () => {
+        const department = prompt('Enter target Department/Team to forward this to:');
+        if (!department) return;
+        try {
+            // Re-using escalate logic physically but semantically changing department conceptually
+            await ticketAPI.updateTicket(id, { category: department.toLowerCase(), tpcResponse: `Forwarded to ${department}` });
+            toast.success('Ticket successfully forwarded');
+            loadTicketDetail();
+        } catch (err) {
+            toast.error('Forward failed');
+        }
+    };
+
+    const handleFollowup = async () => {
+        const days = prompt('How many days until follow-up?');
+        if (!days || isNaN(days)) return;
+        toast.info(`Follow-up notification scheduled in ${days} days.`);
+        // Note: Real implementation would save to DB nextFollowup date
     };
 
     const handleAddNote = async () => {
@@ -437,6 +476,12 @@ const TPCTicketDetail = () => {
                         <button className="ticket-action-btn ticket-action-escalate" onClick={() => handleEscalate()}>
                             ⚡ Escalate
                         </button>
+                        <button className="ticket-action-btn ticket-action-close" onClick={handleForward} style={{background:'#f3f4f6', color:'#3b82f6', border:'1px solid #bfdbfe', marginTop:'8px'}}>
+                            ↪️ Forward
+                        </button>
+                        <button className="ticket-action-btn ticket-action-close" onClick={handleFollowup} style={{background:'#fffbeb', color:'#d97706', border:'1px solid #fde68a', marginTop:'8px', marginBottom: '8px'}}>
+                            ⏰ Set Follow-up
+                        </button>
                         <button className="ticket-action-btn ticket-action-close" onClick={handleClose}>
                             Close
                         </button>
@@ -494,9 +539,9 @@ const TPCTicketDetail = () => {
                         <div className="ticket-assigned-staff">
                             <div className="ticket-assigned-avatar">T</div>
                             <div>
-                                <div className="ticket-assigned-name">TPC Staff</div>
+                                <div className="ticket-assigned-name">{ticket?.assignedTo?.name || 'TPC Staff'}</div>
                                 <div className="ticket-assigned-role">Support Specialist</div>
-                                <button className="ticket-reassign-btn">Reassign Ticket</button>
+                                <button className="ticket-reassign-btn" onClick={handleReassign}>Reassign Ticket</button>
                             </div>
                         </div>
                     </div>

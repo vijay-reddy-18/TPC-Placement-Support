@@ -126,6 +126,25 @@ exports.getAllTickets = async (req, res) => {
         if (priority && priority !== 'null' && priority !== 'undefined') filter.priority = priority;
         if (category && category !== 'null' && category !== 'undefined') filter.category = category;
 
+        // Perform text search if specified
+        const { search } = req.query;
+        if (search && search.trim() !== '') {
+            const searchLogic = {
+                $or: [
+                    { title: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } },
+                    { category: { $regex: search, $options: 'i' } }
+                ]
+            };
+            if (filter.$or) {
+                // If there's an existing $or (like from TPC assignment), wrap in $and
+                filter.$and = [ { $or: filter.$or }, searchLogic ];
+                delete filter.$or;
+            } else {
+                Object.assign(filter, searchLogic);
+            }
+        }
+
         const tickets = await Ticket.find(filter)
             .populate('assignedTo', 'name role')
             .sort({ createdAt: -1 })
@@ -553,11 +572,24 @@ exports.reopenTicket = async (req, res) => {
         const oldStatus = ticket.status;
         ticket.status = 'open';
         ticket.reopenedAt = new Date();
+        
+        // Add reason as a response so it shows in the chat
+        let finalReason = reason || 'User reopened ticket';
+        const user = await User.findById(req.user.userId);
+        const userName = user ? user.name : (req.user.role === 'student' ? 'Student' : 'Staff');
+        
+        ticket.responses.push({
+            sender: req.user.userId,
+            senderRole: req.user.role,
+            senderName: userName,
+            message: `Ticket Reopened: ${finalReason}`,
+            timestamp: new Date()
+        });
 
         await ticket.save();
 
         // Log activity
-        await logActivity(ticket._id, 'ticket-reopened', req.user.userId, 'open', oldStatus, reason);
+        await logActivity(ticket._id, 'ticket-reopened', req.user.userId, 'open', oldStatus, finalReason);
 
         return res.status(200).json({
             success: true,
@@ -877,148 +909,90 @@ exports.getPerformanceStats = async (req, res) => {
     }
 };
 
-// Assign ticket
-exports.assignTicket = async (req, res) => {
+
+// Submit Feedback (Student)
+exports.submitFeedback = async (req, res) => {
     try {
         const { id } = req.params;
-        const { assignedTo } = req.body;
+        const { rating, comment } = req.body;
+
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
+        }
 
         const ticket = await Ticket.findById(id);
-        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-        const oldAssignee = ticket.assignedTo;
-        ticket.assignedTo = assignedTo;
-        ticket.status = 'in-progress';
-        ticket.updatedAt = Date.now();
+        if (!ticket) {
+            return res.status(404).json({ success: false, message: 'Ticket not found' });
+        }
+
+        // Only the ticket owner can submit feedback
+        if (ticket.studentId !== req.user.studentId) {
+            return res.status(403).json({ success: false, message: 'You cannot rate this ticket' });
+        }
+
+        // Only resolved/closed tickets can be rated
+        if (!['resolved', 'closed'].includes(ticket.status)) {
+            return res.status(400).json({ success: false, message: 'Only resolved or closed tickets can be rated' });
+        }
+
+        ticket.feedback = {
+            rating: parseInt(rating),
+            comment: comment || '',
+            submittedAt: new Date(),
+        };
+
         await ticket.save();
+        await logActivity(ticket._id, 'feedback-submitted', req.user._id, rating, null, `Student rated ticket ${rating}/5`);
 
-        await logActivity(id, 'assigned', req.user.userId, assignedTo, oldAssignee, 'Ticket assigned to staff');
-
-        return res.status(200).json({ success: true, message: 'Ticket assigned successfully', ticket });
+        return res.status(200).json({ success: true, message: 'Feedback submitted successfully', ticket });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Assign failed', error: error.message });
+        console.error('Submit feedback error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to submit feedback', error: error.message });
     }
 };
 
-// Escalate ticket
-exports.escalateTicket = async (req, res) => {
+// Add Student Response / Message (Student)
+exports.addStudentResponse = async (req, res) => {
     try {
         const { id } = req.params;
-        const { escalationReason } = req.body;
+        const { message } = req.body;
+
+        if (!message || !message.trim()) {
+            return res.status(400).json({ success: false, message: 'Message is required' });
+        }
 
         const ticket = await Ticket.findById(id);
-        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+        if (!ticket) {
+            return res.status(404).json({ success: false, message: 'Ticket not found' });
+        }
 
-        const oldPriority = ticket.priority;
-        ticket.priority = 'urgent';
-        
-        const user = await User.findById(req.user.userId);
-        if (!ticket.internalNotes) ticket.internalNotes = [];
-        ticket.internalNotes.push({
-            note: `ESCALATED: ${escalationReason || 'No reason provided'}`,
-            authorId: req.user.userId,
-            authorName: user?.name || 'Staff',
-            timestamp: new Date()
+        // Only ticket owner can post
+        if (ticket.studentId !== req.user.studentId) {
+            return res.status(403).json({ success: false, message: 'You can only respond to your own tickets' });
+        }
+
+        if (ticket.status === 'closed') {
+            return res.status(400).json({ success: false, message: 'Cannot reply to a closed ticket. Please reopen it first.' });
+        }
+
+        const senderUser = await User.findById(req.user.userId);
+        const senderName = senderUser ? senderUser.name : 'Student';
+
+        ticket.responses.push({
+            sender: req.user.userId,
+            senderRole: 'student',
+            senderName,
+            message: message.trim(),
+            timestamp: new Date(),
         });
+
         await ticket.save();
+        await logActivity(ticket._id, 'response-added', req.user.userId, message.trim(), null, `Student reply by ${senderName}`);
 
-        await logActivity(id, 'escalated', req.user.userId, 'urgent', oldPriority, escalationReason);
-
-        return res.status(200).json({ success: true, message: 'Ticket escalated', ticket });
+        return res.status(200).json({ success: true, message: 'Response added', ticket });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Escalate failed', error: error.message });
-    }
-};
-
-// Reopen ticket
-exports.reopenTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { reason } = req.body;
-
-        const ticket = await Ticket.findById(id);
-        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
-
-        const oldStatus = ticket.status;
-        ticket.status = 'in-progress';
-        
-        const user = await User.findById(req.user.userId);
-        if (!ticket.internalNotes) ticket.internalNotes = [];
-        ticket.internalNotes.push({
-            note: `REOPENED: ${reason || 'User reopened ticket'}`,
-            authorId: req.user.userId,
-            authorName: user?.name || 'User',
-            timestamp: new Date()
-        });
-        await ticket.save();
-
-        await logActivity(id, 'ticket-reopened', req.user.userId, 'in-progress', oldStatus, reason);
-
-        return res.status(200).json({ success: true, message: 'Ticket reopened', ticket });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Reopen failed', error: error.message });
-    }
-};
-
-// Add internal note
-exports.addInternalNote = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { note } = req.body;
-
-        const ticket = await Ticket.findById(id);
-        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
-
-        if (!ticket.internalNotes) ticket.internalNotes = [];
-        const user = await User.findById(req.user.userId);
-
-        ticket.internalNotes.push({
-            note,
-            authorId: req.user.userId,
-            authorName: user?.name || 'Staff',
-            timestamp: new Date()
-        });
-        await ticket.save();
-
-        await logActivity(id, 'internal-note-added', req.user.userId, null, null, 'Internal note added');
-
-        return res.status(200).json({ success: true, message: 'Note added', ticket });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Add note failed', error: error.message });
-    }
-};
-
-// Get Ticket History
-exports.getTicketHistory = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const logs = await ActivityLog.find({ ticketId: id }).sort({ timestamp: -1 });
-        return res.status(200).json({ success: true, logs });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Failed to fetch history', error: error.message });
-    }
-};
-
-// Get Escalated Tickets
-exports.getEscalatedTickets = async (req, res) => {
-    try {
-        const { page = 1, limit = 10 } = req.query;
-        const skip = (page - 1) * limit;
-
-        const tickets = await Ticket.find({ priority: 'urgent', status: { $ne: 'closed' } })
-            .populate('assignedTo', 'name email profilePhoto')
-            .sort({ updatedAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
-            
-        const total = await Ticket.countDocuments({ priority: 'urgent', status: { $ne: 'closed' } });
-
-        return res.status(200).json({
-            success: true,
-            tickets,
-            pagination: { total, pages: Math.ceil(total / limit), currentPage: parseInt(page), limit: parseInt(limit) }
-        });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Failed to fetch escalated tickets', error: error.message });
+        console.error('Student response error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to add response', error: error.message });
     }
 };

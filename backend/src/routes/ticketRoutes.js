@@ -30,5 +30,7 @@ router.put('/:id', authorize('tpc', 'admin'), ticketController.updateTicket);
 router.put('/:id/assign', authorize('tpc', 'admin'), ticketController.assignTicket);
 router.put('/:id/close', ticketController.closeTicket);
 router.post('/:id/note', authorize('tpc', 'admin'), ticketController.addInternalNote);
+router.post('/:id/student-response', ticketController.addStudentResponse); // Student can add message
+router.put('/:id/feedback', ticketController.submitFeedback); // Student feedback on resolved tickets
 
 module.exports = router;

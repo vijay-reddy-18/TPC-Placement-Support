@@ -5,7 +5,7 @@ const connectDB = require('./config/database');
 
 const authRoutes = require('./routes/authRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
-const adminRoutes = require('./routes/adminRoutes');
+const { adminRouter, sharedRouter } = require('./routes/adminRoutes');
 const userSettingsRoutes = require('./routes/userSettingsRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
@@ -18,8 +18,8 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Connect to MongoDB
 connectDB();
@@ -28,7 +28,8 @@ connectDB();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRouter);
+app.use('/api', sharedRouter);          // /api/notifications, /api/kb (shared)
 app.use('/api/user', userSettingsRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/activity-logs', activityLogRoutes);

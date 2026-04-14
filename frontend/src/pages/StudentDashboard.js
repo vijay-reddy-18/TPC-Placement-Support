@@ -330,102 +330,67 @@ const StudentDashboard = () => {
 
     return (
         <div className="dashboard-container">
-            {/* Sidebar */}
-            <div style={{
-                width: '250px',
-                background: 'linear-gradient(180deg, #e7f3ff 0%, #d4e8f7 100%)',
-                padding: '2rem 0',
-                boxShadow: '2px 0 8px rgba(0,0,0,0.08)',
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'fixed',
-                height: '100vh',
-                left: 0,
-                top: 0,
-                overflowY: 'auto',
-            }}>
+            {/* Sidebar - Dark Theme matching Admin/TPC mockups */}
+            <div style={{ width: '260px', background: '#1e293b', padding: '1.5rem 0', boxShadow: '4px 0 10px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', left: 0, top: 0, overflowY: 'auto', color: '#fff', zIndex: 1000 }}>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
-                    <div className="px-3 mb-4">
-                        <div style={{
-                            width: '60px',
-                            height: '60px',
-                            background: '#0066cc',
-                            borderRadius: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'white',
-                            fontSize: '28px',
-                            fontWeight: 'bold',
-                            margin: '0 auto',
-                        }}>
-                            📚
+                    <div className="px-4 mb-4 text-center">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                            <div style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '20px', fontWeight: 'bold' }}>🎓</div>
+                            <h4 style={{ color: 'white', margin: 0, fontWeight: '700', fontSize: '1.2rem' }}>Portal</h4>
                         </div>
                     </div>
 
-                    <div className="sidebar-menu">
-                        {isFeatureActive('Dashboard') && (
-                            <a
-                                href="#"
-                                onClick={(e) => { e.preventDefault(); setActiveSection('dashboard'); setShowCreateForm(false); }}
+                    <div className="sidebar-menu" style={{ padding: '0 1rem' }}>
+                        {[
+                            { id: 'dashboard', icon: <FaHome />, label: 'Dashboard' },
+                            { id: 'queries', icon: <FaThList />, label: 'My Tickets' },
+                            { id: 'newTicket', icon: <FaEdit />, label: 'Create Ticket' },
+                            { id: 'profile', icon: <FaUser />, label: 'Profile' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); if(item.id === 'newTicket') { setShowCreateForm(true); setActiveSection('dashboard'); } else { setActiveSection(item.id); setShowCreateForm(false); } }}
                                 className="sidebar-item"
-                                style={{ color: activeSection === 'dashboard' ? '#0066cc' : '#666', fontWeight: activeSection === 'dashboard' ? 'bold' : 'normal', display: 'flex', alignItems: 'center', padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer' }}>
-                                <FaHome className="me-2" /> Dashboard
+                                style={{
+                                    color: activeSection === item.id && !showCreateForm && item.id !== 'newTicket' ? '#fff' : '#94a3b8',
+                                    background: activeSection === item.id && !showCreateForm && item.id !== 'newTicket' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                                    borderLeft: activeSection === item.id && !showCreateForm && item.id !== 'newTicket' ? '4px solid #3b82f6' : '4px solid transparent',
+                                    fontWeight: activeSection === item.id && !showCreateForm && item.id !== 'newTicket' ? '600' : '500',
+                                    display: 'flex', alignItems: 'center', gap: '12px', padding: '0.85rem 1rem', marginBottom: '0.25rem', borderRadius: '0 8px 8px 0', textDecoration: 'none', transition: 'all 0.2s'
+                                }}>
+                                {item.icon} {item.label}
                             </a>
-                        )}
-                        {isFeatureActive('My Queries') && (
-                            <a
-                                href="#"
-                                onClick={(e) => { e.preventDefault(); setActiveSection('queries'); setShowCreateForm(false); }}
-                                className="sidebar-item"
-                                style={{ color: activeSection === 'queries' ? '#0066cc' : '#666', fontWeight: activeSection === 'queries' ? 'bold' : 'normal', display: 'flex', alignItems: 'center', padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer' }}>
-                                <FaThList className="me-2" /> My Queries
-                            </a>
-                        )}
-                        {isFeatureActive('Create Ticket') && (
-                            <a
-                                href="#"
-                                className="sidebar-item"
-                                onClick={(e) => { e.preventDefault(); setShowCreateForm(true); setActiveSection('dashboard'); }}
-                                style={{ color: '#666', display: 'flex', alignItems: 'center', padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer' }}>
-                                <FaEdit className="me-2" /> Create Ticket
-                            </a>
-                        )}
-                        {isFeatureActive('Profile') && (
-                            <a
-                                href="#"
-                                onClick={(e) => { e.preventDefault(); setActiveSection('profile'); setShowCreateForm(false); }}
-                                className="sidebar-item"
-                                style={{ color: activeSection === 'profile' ? '#0066cc' : '#666', fontWeight: activeSection === 'profile' ? 'bold' : 'normal', display: 'flex', alignItems: 'center', padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer' }}>
-                                <FaUser className="me-2" /> Profile
-                            </a>
-                        )}
+                        ))}
                     </div>
                 </div>
 
-                {/* Bottom Section - Settings & Logout */}
-                <div style={{ borderTop: '1px solid #b3d9ff', padding: '1rem 0' }}>
-                    {isFeatureActive('Settings') && (
-                        <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); setActiveSection('settings'); setShowCreateForm(false); }}
-                            className="sidebar-item"
-                            style={{ color: activeSection === 'settings' ? '#0066cc' : '#666', fontWeight: activeSection === 'settings' ? 'bold' : 'normal', display: 'flex', alignItems: 'center', padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer' }}>
-                            <FaCog className="me-2" /> Settings
-                        </a>
-                    )}
-                    <a
-                        href="#"
-                        className="sidebar-item text-danger d-flex align-items-center gap-2"
-                        onClick={(e) => { e.preventDefault(); logout(); }}
-                        style={{ padding: '0.75rem 1.5rem', textDecoration: 'none', cursor: 'pointer', color: '#dc3545' }}>
+                <div style={{ borderTop: '1px solid #334155', padding: '1.25rem' }}>
+                    <a href="#" className="d-flex align-items-center gap-2" onClick={(e) => { e.preventDefault(); logout(); }} style={{ padding: '0.75rem', textDecoration: 'none', cursor: 'pointer', color: '#ef4444', fontWeight: '600', borderRadius: '8px', transition: 'background 0.2s' }}>
                         <FaSignOutAlt /> Logout
                     </a>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="main-content" style={{ padding: '3rem 2rem', background: '#f8fafc', marginLeft: '250px' }}>
+            <div className="main-content" style={{ padding: '0', background: '#f8fafc', marginLeft: '260px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+<div style={{ padding: '2.5rem' }}>
+                {/* Global Topbar with Notifications and Profile */}
+                <div style={{ height: '70px', background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 2rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', width: '100%', position: 'sticky', top: 0, zIndex: 999 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <div style={{ cursor: 'pointer', position: 'relative' }} onClick={() => { alert("Notifications icon clicked!"); }}>
+                            <span style={{ fontSize: '20px', color: '#64748b' }}>🔔</span>
+                            <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#ef4444', width: '8px', height: '8px', borderRadius: '50%' }}></span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', borderLeft: '1px solid #e2e8f0', paddingLeft: '20px' }} onClick={() => { setActiveSection('profile'); setShowCreateForm(false); }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#0f172a', lineHeight: '1.2' }}>{user?.name || 'Student Name'}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Student</div>
+                            </div>
+                            <div style={{ width: '36px', height: '36px', background: '#3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold' }}>
+                                {user?.name?.charAt(0) || 'S'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Dashboard Section */}
                 {activeSection === 'dashboard' && (
                     <>
@@ -1184,84 +1149,8 @@ const StudentDashboard = () => {
                     </>
                 )}
             </div>
-
-            {/* ===== Ticket Details Modal ===== */}
-        <Modal show={showTicketModal} onHide={() => setShowTicketModal(false)} centered size="lg">
-            <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)', color: 'white' }}>
-                <Modal.Title style={{ fontWeight: '700' }}>
-                    🎫 Ticket Details
-                    {selectedTicket && <span style={{ fontSize: '0.85rem', fontWeight: '400', marginLeft: '0.75rem', opacity: 0.85 }}>#{selectedTicket._id?.slice(-6)}</span>}
-                </Modal.Title>
-            </Modal.Header>
-            <Modal.Body style={{ padding: '1.75rem' }}>
-                {selectedTicket && (
-                    <>
-                        <div className="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <h5 style={{ fontWeight: '700', marginBottom: '0.25rem' }}>{selectedTicket.title}</h5>
-                                <span style={{ fontSize: '0.8rem', color: '#888' }}>Created: {new Date(selectedTicket.createdAt).toLocaleString()}</span>
-                            </div>
-                            <Badge pill style={{
-                                background: selectedTicket.status === 'open' ? '#4a90e2' : selectedTicket.status === 'in-progress' ? '#f39c12' : '#27ae60',
-                                fontSize: '0.85rem', padding: '0.5rem 1rem', fontWeight: '600'
-                            }}>
-                                {selectedTicket.status === 'open' ? '🔵 Open' : selectedTicket.status === 'in-progress' ? '🟡 In Progress' : '🟢 Resolved'}
-                            </Badge>
-                        </div>
-
-                        <div className="row g-3 mb-3">
-                            <div className="col-sm-6">
-                                <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.75rem 1rem' }}>
-                                    <small className="text-muted fw-bold d-block mb-1">CATEGORY</small>
-                                    <span style={{ textTransform: 'capitalize', fontWeight: '600' }}>{selectedTicket.category}</span>
-                                </div>
-                            </div>
-                            <div className="col-sm-6">
-                                <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.75rem 1rem' }}>
-                                    <small className="text-muted fw-bold d-block mb-1">PRIORITY</small>
-                                    <Badge style={{
-                                        background: selectedTicket.priority === 'urgent' ? '#dc3545' : selectedTicket.priority === 'high' ? '#fd7e14' : selectedTicket.priority === 'medium' ? '#ffc107' : '#28a745',
-                                        color: selectedTicket.priority === 'medium' ? '#333' : 'white',
-                                        fontSize: '0.8rem', padding: '0.35rem 0.75rem'
-                                    }}>
-                                        {selectedTicket.priority}
-                                    </Badge>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-                            <small className="text-muted fw-bold d-block mb-2">📝 DESCRIPTION</small>
-                            <p style={{ marginBottom: 0, lineHeight: '1.6', color: '#333' }}>{selectedTicket.description}</p>
-                        </div>
-
-                        {selectedTicket.resolution ? (
-                            <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '1rem 1.25rem', border: '1px solid #c8e6c9' }}>
-                                <small className="fw-bold d-block mb-2" style={{ color: '#2e7d32' }}>✅ TPC RESOLUTION / RESPONSE</small>
-                                <p style={{ marginBottom: 0, lineHeight: '1.6', color: '#1b5e20' }}>{selectedTicket.resolution}</p>
-                                {selectedTicket.resolvedAt && (
-                                    <small className="text-muted d-block mt-2">Resolved on: {new Date(selectedTicket.resolvedAt).toLocaleString()}</small>
-                                )}
-                            </div>
-                        ) : (
-                            <div style={{ background: '#fff3e0', borderRadius: '10px', padding: '1rem 1.25rem', border: '1px solid #ffe0b2' }}>
-                                <small className="fw-bold d-block mb-1" style={{ color: '#e65100' }}>⏳ AWAITING RESPONSE</small>
-                                <p style={{ marginBottom: 0, fontSize: '0.9rem', color: '#bf360c' }}>
-                                    TPC staff has not yet provided a resolution. We'll notify you when your ticket is responded to.
-                                </p>
-                            </div>
-                        )}
-                    </>
-                )}
-            </Modal.Body>
-            <Modal.Footer style={{ background: '#f8f9fa' }}>
-                <Button variant="secondary" onClick={() => setShowTicketModal(false)} style={{ borderRadius: '8px' }}>
-                    Close
-                </Button>
-            </Modal.Footer>
-        </Modal>
         </div>
+</div>
     );
 };
-
 export default StudentDashboard;

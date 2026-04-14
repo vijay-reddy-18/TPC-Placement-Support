@@ -13,8 +13,8 @@ const ticketSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['placement', 'internship', 'document', 'company-eligibility', 'internship-confirmation', 'offer-letter', 'document-verification', 'interview-schedule', 'placement-process', 'other'],
       required: [true, 'Category is required'],
+      trim: true,
     },
     priority: {
       type: String,
@@ -101,6 +101,11 @@ const ticketSchema = new mongoose.Schema(
       type: String,
       enum: ['cse', 'ece', 'mech', 'civil', 'eee', 'it', 'other'],
       default: null,
+    },
+    feedback: {
+      rating: { type: Number, min: 1, max: 5, default: null },
+      comment: { type: String, default: null },
+      submittedAt: { type: Date, default: null },
     },
   },
   { timestamps: true }

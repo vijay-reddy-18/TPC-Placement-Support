@@ -1,7 +1,7 @@
 {
-  "name": "restaurant-backend",
+  "name": "tpc-backend",
   "version": "1.0.0",
-  "description": "Backend API for Restaurant Management System",
+  "description": "Backend API for TPC Support System",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -11,13 +11,13 @@
     "test:coverage": "jest --coverage"
   },
   "keywords": [
-    "restaurant",
+    "tpc",
     "food-delivery",
     "nodejs",
     "express",
     "mongodb"
   ],
-  "author": "Restaurant Team",
+  "author": "TPC Team",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -76,6 +76,8 @@ export const ticketAPI = {
     getPerformanceStats: () => api.get('/tickets/stats/performance'),
     getEscalatedTickets: (page = 1, limit = 10) => api.get('/tickets/escalated/list', { params: { page, limit } }),
     addInternalNote: (id, note) => api.post(`/tickets/${id}/note`, { note }),
+    submitFeedback: (id, rating, comment) => api.put(`/tickets/${id}/feedback`, { rating, comment }),
+    addStudentResponse: (id, message) => api.post(`/tickets/${id}/student-response`, { message }),
 };
 
 // User Settings APIs
