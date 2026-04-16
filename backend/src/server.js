@@ -23,7 +23,46 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Connect to MongoDB
 connectDB();
+app.get('/seed-admin', async (req, res) => {
+  try {
+    const User = require('./models/User');
 
+    // Delete old admin & tpc (avoid duplicates)
+    await User.deleteMany({ role: { $in: ['admin', 'tpc'] } });
+
+    // Create Admin
+    const admin = await User.create({
+      studentId: '10000000',
+      name: 'System Administrator',
+      email: 'admin@college.edu',
+      password: 'admin@12345', // plain → auto hashed
+      role: 'admin'
+    });
+
+    // Create TPC
+    const tpc = await User.create({
+      studentId: '10000001',
+      name: 'TPC Department',
+      email: 'tpc@college.edu',
+      password: 'tpc@12345', // plain → auto hashed
+      role: 'tpc'
+    });
+
+    res.json({
+      success: true,
+      message: 'Admin & TPC created successfully',
+      admin,
+      tpc
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
 // ================= API ROUTES =================
 
 app.use('/api/auth', authRoutes);
