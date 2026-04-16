@@ -5,7 +5,7 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(localStorage.getItem('token'));
+    const [token, setToken] = useState(sessionStorage.getItem('token'));
     const [features, setFeatures] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
                     
                 } catch (error) {
                     console.error('Auth check failed:', error);
-                    localStorage.removeItem('token');
+                    sessionStorage.removeItem('token');
                     setToken(null);
                 }
             }
@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await authAPI.login(studentId, password, role);
             const { token, user } = response.data;
-            localStorage.setItem('token', token);
+            sessionStorage.setItem('token', token);
             setToken(token);
             setUser(user);
             
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await authAPI.register(studentId, name, password, confirmPassword);
             const { token, user } = response.data;
-            localStorage.setItem('token', token);
+            sessionStorage.setItem('token', token);
             setToken(token);
             setUser(user);
 
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
         setToken(null);
         setUser(null);
         setFeatures([]);

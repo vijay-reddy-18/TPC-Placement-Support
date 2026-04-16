@@ -64,8 +64,8 @@ export const logoutUser = createAsyncThunk(
 
 const initialState = {
   user: null,
-  token: localStorage.getItem('token'),
-  refreshToken: localStorage.getItem('refreshToken'),
+  token: sessionStorage.getItem('token'),
+  refreshToken: sessionStorage.getItem('refreshToken'),
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -83,8 +83,8 @@ const authSlice = createSlice({
       state.token = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('refreshToken');
     },
     setCredentials: (state, action) => {
       const { user, token, refreshToken } = action.payload;
@@ -92,8 +92,8 @@ const authSlice = createSlice({
       state.token = token;
       state.refreshToken = refreshToken;
       state.isAuthenticated = true;
-      localStorage.setItem('token', token);
-      localStorage.setItem('refreshToken', refreshToken);
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('refreshToken', refreshToken);
     },
   },
   extraReducers: (builder) => {
@@ -110,8 +110,8 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refreshToken;
         state.isAuthenticated = true;
         state.error = null;
-        localStorage.setItem('token', action.payload.token);
-        localStorage.setItem('refreshToken', action.payload.refreshToken);
+        sessionStorage.setItem('token', action.payload.token);
+        sessionStorage.setItem('refreshToken', action.payload.refreshToken);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -131,8 +131,8 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refreshToken;
         state.isAuthenticated = true;
         state.error = null;
-        localStorage.setItem('token', action.payload.token);
-        localStorage.setItem('refreshToken', action.payload.refreshToken);
+        sessionStorage.setItem('token', action.payload.token);
+        sessionStorage.setItem('refreshToken', action.payload.refreshToken);
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -153,24 +153,24 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('refreshToken');
       })
 
       // Refresh Token
       .addCase(refreshToken.fulfilled, (state, action) => {
         state.token = action.payload.token;
         state.refreshToken = action.payload.refreshToken;
-        localStorage.setItem('token', action.payload.token);
-        localStorage.setItem('refreshToken', action.payload.refreshToken);
+        sessionStorage.setItem('token', action.payload.token);
+        sessionStorage.setItem('refreshToken', action.payload.refreshToken);
       })
       .addCase(refreshToken.rejected, (state) => {
         state.user = null;
         state.token = null;
         state.refreshToken = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('refreshToken');
       })
 
       // Logout
@@ -179,8 +179,8 @@ const authSlice = createSlice({
         state.token = null;
         state.refreshToken = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('refreshToken');
       });
   },
 });
