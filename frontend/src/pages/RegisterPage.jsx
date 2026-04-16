@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Container, Form, Button, Card, Alert } from 'react-bootstrap';
 import { FaUserPlus } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import '../styles/Auth.css';
 
 const RegisterPage = () => {
@@ -80,6 +81,7 @@ const RegisterPage = () => {
                 formData.password,
                 formData.confirmPassword
             );
+            toast.success('Registration successful!');
             navigate('/dashboard');
         } catch (error) {
             setGeneralError(error.message || 'Registration failed. Please try again.');

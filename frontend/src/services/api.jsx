@@ -33,7 +33,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Token expired or invalid auth
       sessionStorage.removeItem("token");
-      window.location.href = "/login";
+      window.location.href = "/login?expired=true";
     }
     
     console.error("[API ERROR]", {
@@ -81,8 +81,13 @@ export const ticketAPI = {
   getTicket: (id) => api.get(`/tickets/${id}`),
   updateTicket: (id, data) => api.put(`/tickets/${id}`, data),
   closeTicket: (id) => api.put(`/tickets/${id}/close`),
+  reopenTicket: (id, reason) => api.put(`/tickets/reopen/${id}`, { reason }),
   assignTicket: (id, assignedTo) =>
     api.put(`/tickets/${id}/assign`, { assignedTo }),
+  addStudentResponse: (id, message) =>
+    api.post(`/tickets/${id}/student-response`, { message }),
+  submitFeedback: (id, data) =>
+    api.put(`/tickets/${id}/feedback`, data),
 };
 
 // ================= USER =================

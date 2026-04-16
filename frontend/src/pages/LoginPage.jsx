@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEffect } from 'react';
+import { toast } from 'react-toastify';
 import '../styles/Auth.css';
 
 const LoginPage = () => {
@@ -14,6 +15,16 @@ const LoginPage = () => {
     const [generalError, setGeneralError] = useState('');
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('expired') === 'true') {
+            toast.warn('Your session has expired. Please log in again.');
+            params.delete('expired');
+            navigate('/login', { replace: true });
+        }
+    }, [location, navigate]);
 
     const validateForm = () => {
         const newErrors = {};
@@ -46,6 +57,7 @@ const LoginPage = () => {
         try {
             const role = tab === 'student' ? 'student' : staffRole;
             await login(studentId, password, role);
+            toast.success('Successfully logged in!');
             navigate('/dashboard');
         } catch (error) {
             setGeneralError(error.message || 'Login failed. Please check your credentials.');

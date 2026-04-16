@@ -77,6 +77,9 @@ export const AuthProvider = ({ children }) => {
         setToken(null);
         setUser(null);
         setFeatures([]);
+        import('react-toastify').then(({ toast }) => {
+            toast.success("Logged out successfully");
+        });
     };
 
     return (
